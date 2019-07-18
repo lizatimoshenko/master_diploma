@@ -5,16 +5,11 @@ from arango_orm import Collection, Relation, Graph, GraphConnection
 from passlib.hash import sha256_crypt
 from .databases import ArangoDataBase
 
-
-#sys_db = client.db('_system', username='root', password='root')
-#sys_db.create_database('books')
-
-
 db = ArangoDataBase.connect()
 
 
 class User(Collection):
-
+    """Class for User node"""
     __collection__ = 'users'
 
     _key = Integer(required=True)  # user_id
@@ -22,6 +17,7 @@ class User(Collection):
     password = String(required=True, allow_none=False)
 
     def find(self, username):
+        """ Find user in database by username """
         try:
             user = db.query(User).filter_by(username)  # is it correct?
             return user
@@ -48,13 +44,38 @@ class User(Collection):
         return sha256_crypt.verify(password, user.password)
 
     @staticmethod
-    def get_all_users():
+    def users():
+        """List of all users"""
         users = db.query(User).all()
-
         return [u.username for u in users]
+
+    @staticmethod
+    def reads(user_id, book_id):
+        """Create relationship (User)-[:READS]->(Book)"""
+        book = db.query(Book).by_key(book_id)
+        user = db.query(User).by_key(user_id)
+        db.add(graph.relation(user, Relation("reads"), book))
+        return True
+
+    @staticmethod
+    def follows(user_id, friend_id):
+        """Create relationship (User)-[:FOLLOWS]->(User)"""
+        friend = db.query(User).by_key(friend_id)
+        user = db.query(User).by_key(user_id)
+        db.add(graph.relation(user, Relation("follows"), friend))
+        return True
+
+    @staticmethod
+    def likes(user_id, book_id):
+        """Create relationship (User)-[:LIKES]->(Book)"""
+        book = db.query(Book).by_key(book_id)
+        user = db.query(User).by_key(user_id)
+        db.add(graph.relation(user, Relation("likes"), book))
+        return True
 
 
 class Book(Collection):
+    """Class for Book node"""
     __collection__ = "books"
 
     _key = Integer(required=True)  # book_id
@@ -76,10 +97,18 @@ class Book(Collection):
         return True
 
     @staticmethod
-    def get_all_books():
+    def books():
+        """Returns list of all books"""
         books = db.query(Book).all()
-        print(type(books))
-        return True
+        return books
+
+    @staticmethod
+    def tags(book_id):
+        """List of tags for specific book"""
+        book = db.query(Book).by_key(book_id)
+        graph.expand(book, depth=1, direction='any')
+        tags = [tag._object_from.tag_name for tag in book._relations["tagged_to"]]
+        return tags
 
     @staticmethod
     def most_popular_books():
@@ -95,6 +124,7 @@ class Book(Collection):
 
 
 class Tag(Collection):
+    """Class for Tag node"""
     __collection__ = "tags"
 
     _key = Integer(required=True)  # tag_id
@@ -106,17 +136,16 @@ class Tag(Collection):
             _key=tag_id,
             tag_name=tag_name
         )
-
         db.add(tag)
-
         return True
 
     @staticmethod
-    def get_tag(book_id):
+    def add_tag_to_book(book_id, tag_id):
+        """Create relationship (Tag)-[:TAGGED_TO]->(Book)"""
         book = db.query(Book).by_key(book_id)
-        graph.expand(book, depth=1, direction='any')
-        tags = [tag._object_from.tag_name for tag in book._relations["tagged_to"]]
-        return tags
+        tag = db.query(Tag).by_key(tag_id)
+        db.add(graph.relation(book, Relation("tagged_to"), tag))
+        return True
 
 
 class TaggedTo(Relation):
@@ -158,38 +187,6 @@ class BooksGraph(Graph):
 
 graph = BooksGraph(connection=db)
 # db.create_graph(graph)
-
-
-def add_tag_to_book(book_id, tag_id):
-    book = db.query(Book).by_key(book_id)
-    tag = db.query(Tag).by_key(tag_id)
-    db.add(graph.relation(book,  Relation("tagged_to"), tag))
-
-    return True
-
-
-def add_read_books(user_id, book_id):
-    book = db.query(Book).by_key(book_id)
-    user = db.query(User).by_key(user_id)
-    db.add(graph.relation(user,  Relation("reads"), book))
-
-    return True
-
-
-def add_friends_list(user_id, friend_id):
-    friend = db.query(User).by_key(friend_id)
-    user = db.query(User).by_key(user_id)
-    db.add(graph.relation(user,  Relation("follows"), friend))
-
-    return True
-
-
-def add_liked_books(user_id, book_id):
-    book = db.query(Book).by_key(book_id)
-    user = db.query(User).by_key(user_id)
-    db.add(graph.relation(user,  Relation("likes"), book))
-
-    return True
 
 
 def clear_graph():

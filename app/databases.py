@@ -15,6 +15,8 @@ class Neo4JDataBase:
 
 class OrientDataBase:
 
+
+
     @staticmethod
     def connect():
         client = OrientDB("localhost", 2424)
@@ -32,3 +34,9 @@ class ArangoDataBase:
         client = ArangoClient(protocol='http', host='localhost', port=8529)
         test_db = client.db('books', username='root', password='root')
         return Database(test_db)
+
+    @staticmethod
+    def create():
+        client = ArangoClient(protocol='http', host='localhost', port=8529)
+        sys_db = client.db('_system', username='root', password='root')
+        sys_db.create_database('books')

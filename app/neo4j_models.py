@@ -36,8 +36,16 @@ class Book(GraphObject):
 
     @staticmethod
     def books():
+        """ Returns list of all books """
         books = graph.run("MATCH (b:Book) RETURN b.username").data()
         return books
+
+    @staticmethod
+    def tags(book_id):
+        """List of tags for specific book"""
+        book = Book.match(graph, book_id).first()
+        tags = [tag.tag_name for tag in book.tags]
+        return tags
 
     @staticmethod
     def most_popular_books():
@@ -90,7 +98,7 @@ class User(GraphObject):
 
     @staticmethod
     def users():
-        """List of all users"""
+        """Returns list of all users"""
         return graph.run("MATCH (u:User) RETURN u.username").data()
 
     @staticmethod
@@ -137,29 +145,12 @@ class Tag(GraphObject):
         return True
 
     @staticmethod
-    def tags(book_id):
-        """List of tags for specific book"""
-        book = Book.match(graph, book_id).first()
-        tags = [tag.tag_name for tag in book.tags]
-        return tags
-
-    @staticmethod
     def add_tag_to_book(book_id, tag_id):
-
+        """Create relationship (Tag)-[:TAGGED_TO]->(Book)"""
         book = Book.match(graph, [int(book_id)]).first()
         tag = Tag.match(graph, int(tag_id)).first()
         graph.create(Relationship(tag.__node__, "TAGGED_TO", book.__node__))
         return True
-
-
-
-
-
-
-
-
-
-
 
 
 def clear_graph():
