@@ -10,6 +10,7 @@ client, graph = OrientDataBase.connect()
 
 
 class User(Node):
+    """Class for User node"""
     __primary_key__ = "username"
     element_plural = 'users'
 
@@ -40,12 +41,37 @@ class User(Node):
         return sha256_crypt.verify(password, user[0].password)
 
     @staticmethod
-    def get_all_users():
+    def users():
+        """List of all users"""
         users = graph.users.query().all()
         return [user.username for user in users]
 
+    @staticmethod
+    def reads(user_id, book_id):
+        """Create relationship (User)-[:READS]->(Book)"""
+        user = graph.users.query(user_id=user_id).first()
+        book = graph.books.query(book_id=book_id).first()
+        graph.reads.create(user, book)
+        return True
+
+    @staticmethod
+    def follows(user_id, friend_id):
+        """Create relationship (User)-[:FOLLOWS]->(User)"""
+        user = graph.users.query(user_id=user_id).first()
+        friend = graph.books.query(friend_id=friend_id).first()
+        graph.follows.create(user, friend)
+        return True
+
+    @staticmethod
+    def likes(user_id, book_id):
+        user = graph.users.query(user_id=user_id).first()
+        book = graph.books.query(book_id=book_id).first()
+        graph.likes.create(user, book)
+        return True
+
 
 class Book(Node):
+    """Class for Book node"""
     element_plural = "books"
     registry_plural = "books"
 
@@ -68,7 +94,8 @@ class Book(Node):
         return True
 
     @staticmethod
-    def get_all_books():
+    def books():
+        """Returns list of all books"""
         books = graph.query(Book).all()
         return [book for book in books]
 
@@ -85,8 +112,16 @@ class Book(Node):
         """
         return graph.query(query)  # alright?
 
+    @staticmethod
+    def tags(book_id):
+        """List of tags for specific book"""
+        book = graph.books.query(book_id=book_id).first()
+        tags = [tag.outV().tag_name for tag in book.inE()]
+        return tags
+
 
 class Tag(Node):
+    """Class for Tag node"""
     element_plural = "tags"
 
     tag_id = Integer()
@@ -102,12 +137,12 @@ class Tag(Node):
         return True
 
     @staticmethod
-    def get_tag(book_id):
-        """ Get all tags names tagged to chosen book"""
-
+    def tagged(book_id, tag_id):
+        """Create relationship (Tag)-[:TAGGED_TO]->(Book)"""
         book = graph.books.query(book_id=book_id).first()
-        tags = [tag.outV().tag_name for tag in book.inE()]
-        return tags
+        tag = graph.tags.query(tag_id=tag_id).first()
+        graph.tagged_to.create(tag, book)
+        return True
 
 
 class TaggedTo(Relationship):
@@ -124,41 +159,6 @@ class Follows(Relationship):
 
 class Likes(Relationship):
     label = "likes"
-
-
-def add_tag_to_book(book_id, tag_id):
-    book = graph.books.query(book_id=book_id).first()
-    tag = graph.tags.query(tag_id=tag_id).first()
-    graph.tagged_to.create(tag, book)
-
-    return True
-
-
-def add_read_books(user_id, book_id):
-    user = graph.users.query(user_id=user_id).first()
-    book = graph.books.query(book_id=book_id).first()
-
-    graph.reads.create(user, book)
-
-    return True
-
-
-def add_friends_list(user_id, friend_id):
-    user = graph.users.query(user_id=user_id).first()
-    friend = graph.books.query(friend_id=friend_id).first()
-
-    graph.follows.create(user, friend)
-
-    return True
-
-
-def add_liked_books(user_id, book_id):
-    user = graph.users.query(user_id=user_id).first()
-    book = graph.books.query(book_id=book_id).first()
-
-    graph.likes.create(user, book)
-
-    return True
 
 
 def clear_graph():

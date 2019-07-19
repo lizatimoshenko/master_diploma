@@ -190,6 +190,7 @@ graph = BooksGraph(connection=db)
 
 
 def clear_graph():
+    """Clear data from the graph"""
     db.delete_graph('book_graph')
     return True
 
