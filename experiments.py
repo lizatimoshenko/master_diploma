@@ -1,9 +1,14 @@
-from app.neo4j_models import User, Book, Tag, add_tag_to_book, add_read_books
-from app.orientdb_models import User, Book, Tag, add_tag_to_book, add_read_books
-from app.arango_models import User, Book, Tag, add_tag_to_book, add_read_books
+"""Experiments for comparison of databases """
 from time import time
-import pandas as pd
+
 import csv
+import pandas as pd
+
+from app.neo4j_models import User, Book, Tag, clear_graph
+#from app.orientdb_models import User, Book, Tag
+#from app.arango_models import User, Book, Tag
+
+
 
 # nodes
 tags = pd.read_csv('/home/liza/PycharmProjects/diploma/tags.csv')                    # 34252
@@ -16,21 +21,21 @@ followers = pd.read_csv('/home/liza/PycharmProjects/diploma/friends.csv')       
 likes = pd.read_csv('/home/liza/PycharmProjects/diploma/likes.csv')                  # 40466
 
 
-def timing(f):
+def timing(func):
 
     def timed(*args, **kw):
-        ts = time()
-        result = f(*args, **kw)
-        te = time()
-        print(te-ts)
+        time_start = time()
+        result = func(*args, **kw)
+        time_end = time()
+        print(time_end-time_start)
         return result
 
     return timed
 
-
+"""
 @timing
 def add_books_read_by_users():
-    for _, row in books_of_users.iterrows():
+    for index, row in books_of_users.iterrows():
         add_read_books(
             row['user_id'],
             row['book_id'],
@@ -68,19 +73,20 @@ def add_tags():
 
     return True
 
+"""
 
 @timing
-def add_books():
-    book = Book()
+def insert_books():
+    """Inserting books from dataset to graph"""
     for _, row in books.iterrows():
-        book.add_book(
-                      row['book_id'],
-                      row['authors'],
-                      row['original_publication_year'],
-                      row['title'],
-                      row['language_code']
-            )
+        book = Book(row['book_id'],
+                    row['authors'],
+                    row['original_publication_year'],
+                    row['title'],
+                    row['language_code'])
+        book.insert()
 
     return True
+
 
 

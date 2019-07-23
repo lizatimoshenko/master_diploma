@@ -1,3 +1,4 @@
+"""Implementation of models for ArangoDB"""
 from arango import DocumentInsertError
 from arango_orm.exceptions import DocumentNotFoundError
 from arango_orm.fields import String, Integer
@@ -12,19 +13,25 @@ class User(Collection):
     """Class for User node"""
     __collection__ = 'users'
 
-    _key = Integer(required=True)  # user_id
+    _key = String(required=True)  # user_id
     username = String(required=True)
     password = String(required=True, allow_none=False)
 
-    def find(self, username):
-        """ Find user in database by username """
+    def __init__(self, username, password=None, user_id=None):
+        self._key = user_id
+        self.username = username
+        self.password = password
+
+    def find(self):
+        """ Return user in database by username """
         try:
-            user = db.query(User).filter_by(username)  # is it correct?
+            user = db.query(User).filter_by(self.username)  # is it correct?
             return user
         except DocumentNotFoundError:
             return None
 
-    def register(self, user_id, password, username):
+    def insert(self, username, password, user_id):
+        """ Insert user node to graph """
         if not self.find(username):
             try:
                 user = User(_key=user_id, username=username, password=sha256_crypt.encrypt(password))
@@ -32,83 +39,75 @@ class User(Collection):
             except DocumentInsertError:
                 return None
             return True
-
         return False
 
-    def verify_password(self, password, username):
-        user = self.find(username)
-        print(user)
+    def verify_password(self, password):
+        """ Return if password is valid """
+        user = self.find()
         if not user:
             return False
-
         return sha256_crypt.verify(password, user.password)
+
+    def reads(self, book_id):
+        """ Create relationship (User)-[:READS]->(Book) """
+        book = db.query(Book).by_key(book_id)
+        user = db.query(User).by_key(self.user_id)
+        db.add(graph.relation(user, Relation("reads"), book))
+
+    def follows(self, friend_id):
+        """ Create relationship (User)-[:FOLLOWS]->(User) """
+        friend = db.query(User).by_key(friend_id)
+        user = db.query(User).by_key(self.user_id)
+        db.add(graph.relation(user, Relation("follows"), friend))
+
+    def likes(self, book_id):
+        """ Create relationship (User)-[:LIKES]->(Book) """
+        book = db.query(Book).by_key(book_id)
+        user = db.query(User).by_key(self.user_id)
+        db.add(graph.relation(user, Relation("likes"), book))
 
     @staticmethod
     def users():
-        """List of all users"""
+        """Return list of all users"""
         users = db.query(User).all()
         return [u.username for u in users]
-
-    @staticmethod
-    def reads(user_id, book_id):
-        """Create relationship (User)-[:READS]->(Book)"""
-        book = db.query(Book).by_key(book_id)
-        user = db.query(User).by_key(user_id)
-        db.add(graph.relation(user, Relation("reads"), book))
-        return True
-
-    @staticmethod
-    def follows(user_id, friend_id):
-        """Create relationship (User)-[:FOLLOWS]->(User)"""
-        friend = db.query(User).by_key(friend_id)
-        user = db.query(User).by_key(user_id)
-        db.add(graph.relation(user, Relation("follows"), friend))
-        return True
-
-    @staticmethod
-    def likes(user_id, book_id):
-        """Create relationship (User)-[:LIKES]->(Book)"""
-        book = db.query(Book).by_key(book_id)
-        user = db.query(User).by_key(user_id)
-        db.add(graph.relation(user, Relation("likes"), book))
-        return True
 
 
 class Book(Collection):
     """Class for Book node"""
+
     __collection__ = "books"
 
     _key = Integer(required=True)  # book_id
     authors = String(required=True)
-    publication = Integer(required=True)
+    year = Integer(required=True)
     title = String(required=True)
     language = String(required=True)
 
-    @staticmethod
-    def add_book(book_id, authors, publication, title, language):
-        book = Book(
-                    _key=book_id,
-                    authors=authors,
-                    publication=publication,
-                    title=title,
-                    language=language)
-        db.add(book)
+    def __init__(self, book_id, authors, year, title, language):
+        self._key = book_id
+        self.authors = authors
+        self.year = year
+        self.title = title
+        self.language = language
 
-        return True
+    def insert(self):
+        """Inserting book node to graph"""
+        db.add(self)
 
-    @staticmethod
-    def books():
-        """Returns list of all books"""
-        books = db.query(Book).all()
-        return books
-
-    @staticmethod
-    def tags(book_id):
-        """List of tags for specific book"""
-        book = db.query(Book).by_key(book_id)
+    def linked_tags(self):
+        """Return list of tags for specific book"""
+        book = db.query(Book).by_key(self._key)
         graph.expand(book, depth=1, direction='any')
         tags = [tag._object_from.tag_name for tag in book._relations["tagged_to"]]
         return tags
+
+    @staticmethod
+    def books():
+        """Return list of all books"""
+        books = db.query(Book).all()
+        return books
+
 
     @staticmethod
     def most_popular_books():
@@ -125,24 +124,23 @@ class Book(Collection):
 
 class Tag(Collection):
     """Class for Tag node"""
+
     __collection__ = "tags"
 
     _key = Integer(required=True)  # tag_id
     tag_name = String(required=True)
 
-    @staticmethod
-    def add_tag(tag_id, tag_name):
-        tag = Tag(
-            _key=tag_id,
-            tag_name=tag_name
-        )
-        db.add(tag)
-        return True
+    def __init__(self, tag_id, tag_name):
+        self._key = tag_id
+        self.tag_name = tag_name
 
-    @staticmethod
-    def add_tag_to_book(book_id, tag_id):
-        """Create relationship (Tag)-[:TAGGED_TO]->(Book)"""
-        book = db.query(Book).by_key(book_id)
+    def insert(self):
+        """ Insert tag to graph"""
+        db.add(self)
+
+    def link_to_book(self, tag_id):
+        """Create relationship (Tag)-[:TAGGED_TO]->(Book) """
+        book = db.query(Book).by_key(self._key)
         tag = db.query(Tag).by_key(tag_id)
         db.add(graph.relation(book, Relation("tagged_to"), tag))
         return True
