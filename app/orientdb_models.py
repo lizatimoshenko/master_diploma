@@ -7,7 +7,12 @@ from .databases import OrientDataBase
 Node = declarative.declarative_node()
 Relationship = declarative.declarative_relationship()
 
+
+# OrientDataBase.create()
 client, graph = OrientDataBase.connect()
+
+graph.include(Node.registry)
+graph.include(Relationship.registry)
 
 
 class User(Node):
@@ -15,32 +20,29 @@ class User(Node):
 
     __primary_key__ = "username"
     element_plural = 'users'
+    registry_plural = "users"
 
     user_id = String()
     username = String()
     password = String()
 
-    def __init__(self, username, password=None, user_id=None):
-        self.user_id = user_id
-        self.username = username
-        self.password = password
+    def __init__(self, **kwargs):
+        self._props = kwargs
 
     def find(self):
         """ Return user in database by username """
-        query = "SELECT * FROM User WHERE username='%s'"
-        user = client.command(query % self.username)
+        user = graph.query(User, username=self.username)
+        print(user)
         return user
 
-    def insert(self, username, password, user_id):
+    def insert(self):
         """ Insert user node to graph """
+        graph.include(Node.registry)
         if not self.find():
-            graph.users.create(user_id=user_id,
-                               username=username,
-                               password=sha256_crypt.encrypt(password)
+            graph.users.create(user_id=self.user_id,
+                               username=self.username,
+                               password=sha256_crypt.encrypt(self.password)
                                )
-            return True
-
-        return False
 
     def verify_password(self, password):
         """ Return if password is valid """
@@ -79,28 +81,22 @@ class Book(Node):
     element_plural = "books"
     registry_plural = "books"
 
-    book_id = Integer()
+    book_id = String()
     authors = String()
     year = Integer()
     title = String()
     language = String()
 
-    def __init__(self, book_id, authors, year, title, language):
-        self.book_id = book_id
-        self.authors = authors
-        self.year = year
-        self.title = title
-        self.language = language
+    def __init__(self, **kwargs):
+        self._props = kwargs
 
     def insert(self):
         """Inserting book node to graph"""
-        graph.books.create(
-            book_id=self.book_id,
-            authors=self.authors,
-            year=self.year,
-            title=self.title,
-            language=self.language
-        )
+        graph.books.create(book_id=self.book_id,
+                           authors=self.authors,
+                           year=self.year,
+                           title=self.title,
+                           language=self.language)
 
     def linked_tags(self):
         """Return list of tags for specific book"""
@@ -136,9 +132,8 @@ class Tag(Node):
     tag_id = Integer()
     tag_name = String()
 
-    def __init__(self, tag_id, tag_name):
-        self.tag_id = tag_id
-        self.tag_name = tag_name
+    def __init__(self, **kwargs):
+        self._props = kwargs
 
     def insert(self):
         """ Insert tag to graph"""
@@ -175,5 +170,4 @@ def clear_graph():
     graph.drop("books")
 
 
-graph.include(Node.registry)
-graph.include(Relationship.registry)
+
