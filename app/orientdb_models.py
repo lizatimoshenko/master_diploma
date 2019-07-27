@@ -7,12 +7,8 @@ from .databases import OrientDataBase
 Node = declarative.declarative_node()
 Relationship = declarative.declarative_relationship()
 
-
 # OrientDataBase.create()
 client, graph = OrientDataBase.connect()
-
-graph.include(Node.registry)
-graph.include(Relationship.registry)
 
 
 class User(Node):
@@ -22,6 +18,7 @@ class User(Node):
     element_plural = 'users'
     registry_plural = "users"
 
+    _id = String(unique=True)
     user_id = String()
     username = String()
     password = String()
@@ -31,18 +28,16 @@ class User(Node):
 
     def find(self):
         """ Return user in database by username """
-        user = graph.query(User, username=self.username)
-        print(user)
+        user = graph.client.command("SELECT * FROM User WHERE username='%s'" % self.username)
         return user
 
     def insert(self):
-        """ Insert user node to graph """
-        graph.include(Node.registry)
-        if not self.find():
-            graph.users.create(user_id=self.user_id,
-                               username=self.username,
-                               password=sha256_crypt.encrypt(self.password)
-                               )
+        """ Insert user node to graph without checking
+         if user already exists in graph and without password encryption"""
+        graph.users.create(user_id=self.user_id,
+                           username=self.username,
+                           password=self.password
+                           )
 
     def verify_password(self, password):
         """ Return if password is valid """
@@ -51,23 +46,31 @@ class User(Node):
             return False
         return sha256_crypt.verify(password, self.password)
 
+    def find_by_id(self):
+        """ Return user in database by username """
+        user = graph.users.query(user_id=self.user_id).first()
+        return user
+
     def reads(self, book_id):
         """Create relationship (User)-[:READS]->(Book)"""
-        user = graph.users.query(user_id=self.user_id).first()
-        book = graph.books.query(book_id=book_id).first()
-        graph.reads.create(user, book)
+        user = self.find_by_id()
+        if user:
+            book = graph.books.query(book_id=book_id).first()
+            graph.reads.create(user, book)
 
     def follows(self, friend_id):
         """Create relationship (User)-[:FOLLOWS]->(User)"""
-        user = graph.users.query(user_id=self.user_id).first()
-        friend = graph.books.query(friend_id=friend_id).first()
-        graph.follows.create(user, friend)
+        user = self.find_by_id()
+        if user:
+            friend = graph.users.query(user_id=friend_id).first()
+            graph.follows.create(user, friend)
 
     def likes(self, book_id):
         """ Create relationship (User)-[:LIKES]->(Book) """
-        user = graph.users.query(user_id=self.user_id).first()
-        book = graph.books.query(book_id=book_id).first()
-        graph.likes.create(user, book)
+        user = self.find_by_id()
+        if user:
+            book = graph.books.query(book_id=book_id).first()
+            graph.likes.create(user, book)
 
     @staticmethod
     def users():
@@ -81,14 +84,18 @@ class Book(Node):
     element_plural = "books"
     registry_plural = "books"
 
+    _id = String(unique=True)
     book_id = String()
     authors = String()
     year = Integer()
-    title = String()
     language = String()
 
     def __init__(self, **kwargs):
         self._props = kwargs
+
+    def find_by_id(self):
+        book = graph.books.query(book_id=self.book_id).first()
+        return book
 
     def insert(self):
         """Inserting book node to graph"""
@@ -100,9 +107,16 @@ class Book(Node):
 
     def linked_tags(self):
         """Return list of tags for specific book"""
-        book = graph.books.query(book_id=self.book_id).first()
-        tags = [tag.outV().tag_name for tag in book.inE()]
+        tags = [tag.outV().tag_name for tag in self.inE()]
         return tags
+
+    def link_to_tag(self, tag_id):
+        """Create relationship (Book)-[:TAGGED_TO]->(Tag)"""
+        book = self.find_by_id()
+        if book:
+            tag = graph.tags.query(tag_id=tag_id).first()
+            graph.tagged_to.create(book, tag)
+
 
     @staticmethod
     def books():
@@ -129,7 +143,8 @@ class Tag(Node):
 
     element_plural = "tags"
 
-    tag_id = Integer()
+    _id = String(unique=True)
+    tag_id = String()
     tag_name = String()
 
     def __init__(self, **kwargs):
@@ -142,11 +157,9 @@ class Tag(Node):
             tag_name=self.tag_name
         )
 
-    def link_to_book(self, book_id):
-        """Create relationship (Tag)-[:TAGGED_TO]->(Book)"""
-        book = graph.books.query(book_id=book_id).first()
+    def find_by_id(self):
         tag = graph.tags.query(tag_id=self.tag_id).first()
-        graph.tagged_to.create(tag, book)
+        return tag
 
 
 class TaggedTo(Relationship):
@@ -170,4 +183,5 @@ def clear_graph():
     graph.drop("books")
 
 
-
+graph.include(Node.registry)
+graph.include(Relationship.registry)

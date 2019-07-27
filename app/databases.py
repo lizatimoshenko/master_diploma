@@ -18,11 +18,17 @@ class OrientDataBase:
     @staticmethod
     def connect():
         client = pyorient.OrientDB("localhost", 2424)
-        client = client.db_open("books", "root", "root", pyorient.DB_TYPE_GRAPH)
+        client.connect("root", "root")
+        db = client.db_open("books", "root", "root", pyorient.DB_TYPE_GRAPH)
 
         graph = pyorient.ogm.Graph(pyorient.ogm.Config.from_url("localhost" + ":" + str("2424") +
                                                   "/" + "books", "root", "root"))
-        return client, graph
+        return db, graph
+
+    @staticmethod
+    def create():
+        client = pyorient.OrientDB("localhost", 2424)
+        client.db_create("books", pyorient.DB_TYPE_GRAPH, pyorient.STORAGE_TYPE_MEMORY)
 
 
 class ArangoDataBase:

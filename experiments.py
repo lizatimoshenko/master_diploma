@@ -4,89 +4,103 @@ from time import time
 import csv
 import pandas as pd
 
-from app.neo4j_models import User, Book, Tag, clear_graph
-#from app.orientdb_models import User, Book, Tag
-#from app.arango_models import User, Book, Tag
+#from app.neo4j_models import User, Book, Tag, clear_graph
 
-
+from app.orientdb_models import User, Book, Tag, clear_graph
+#from app.arango_models import User, Book, Tag, clear_graph
 
 # nodes
-tags = pd.read_csv('/home/liza/PycharmProjects/diploma/tags.csv')                    # 34252
-books = pd.read_csv('/home/liza/PycharmProjects/diploma/diploma_books_final.csv')    # 10000
-users = pd.read_csv('/home/liza/PycharmProjects/diploma/users.csv')                  # 1000
+tags = pd.read_csv('datasets/tags.csv')  # 34252
+books = pd.read_csv('datasets/diploma_books_final.csv')  # 10000
+users = pd.read_csv('datasets/users.csv')  # 1000
 # relationships
-books_of_users = pd.read_csv('/home/liza/PycharmProjects/diploma/to_read1000.csv')   # 11849
-tags_to_books = pd.read_csv('/home/liza/PycharmProjects/diploma/book_tags_cut.csv')  # 50000
-followers = pd.read_csv('/home/liza/PycharmProjects/diploma/friends.csv')            # 20317
-likes = pd.read_csv('/home/liza/PycharmProjects/diploma/likes.csv')                  # 40466
+books_of_users = pd.read_csv('datasets/to_read1000.csv')  # 11849
+tags_to_books = pd.read_csv('datasets/tags_to_book.csv')  # 50000
+followers = pd.read_csv('datasets/friends.csv')  # 20317
+likes = pd.read_csv('datasets/likes.csv')  # 40466
+
+
+def save_time(test_name, time):
+    with open('results.csv', mode='a') as csv_file:
+        fieldnames = ['test', 'orientdb', 'neo4j', 'arangodb']
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writerow({'test': test_name, 'orientdb': time, 'neo4j': None, 'arangodb': None})
 
 
 def timing(func):
-
     def timed(*args, **kw):
         time_start = time()
         result = func(*args, **kw)
         time_end = time()
-        print(time_end-time_start)
+        running_time = time_end - time_start
+        save_time(func.__name__, running_time)
         return result
 
     return timed
 
-"""
-@timing
-def add_books_read_by_users():
-    for index, row in books_of_users.iterrows():
-        add_read_books(
-            row['user_id'],
-            row['book_id'],
-        )
-    return True
-
-
-@timing
-def add_users():
-    for _, row in users.iterrows():
-        user = User()
-        user.register(row['password'], row['username'])
-
-    return True
-
-
-@timing
-def add_tags_to_book():
-    for _, row in tags_to_books.iterrows():
-        add_tag_to_book(
-            int(row['goodreads_book_id']),
-            int(row['tag_id']),
-        )
-
-    return True
-
-
-@timing
-def add_tags():
-    for _, row in tags.iterrows():
-        Tag.add_tag(
-            row['tag_id'],
-            row['tag_name'],
-        )
-
-    return True
-
-"""
 
 @timing
 def insert_books():
-    """Inserting books from dataset to graph"""
+    """Insert books from dataset to graph"""
     for _, row in books.iterrows():
-        book = Book(row['book_id'],
-                    row['authors'],
-                    row['original_publication_year'],
-                    row['title'],
-                    row['language_code'])
+        book = Book(book_id=row['book_id'],
+                    authors=row['authors'],
+                    year=row['original_publication_year'],
+                    title=row['title'],
+                    language=row['language_code'])
         book.insert()
 
-    return True
+
+
+@timing
+def insert_users():
+    """Insert users from dataset to graph"""
+    for index, row in users.iterrows():
+        user = User(user_id=index, username=row['username'], password=row['password'])
+        user.insert()
 
 
 
+@timing
+def insert_tags():
+    """Insert users from dataset to graph"""
+    for _, row in tags.iterrows():
+        tag = Tag(tag_id=row['tag_id'], tag_name=row['tag_name'])
+        tag.insert()
+
+
+
+@timing
+def insert_reads():
+    """Insert books read by users from dataset to graph"""
+    for _, row in books_of_users.iterrows():
+        user = User(user_id=str(row['user_id']))
+        user.reads(str(row['book_id']))
+
+
+
+@timing
+def insert_tagged_to():
+    for _, row in tags_to_books.iterrows():
+        book = Book(book_id=str(row['book_id']))
+        book.link_to_tag(str(row['tag_id']))
+
+
+@timing
+def insert_follows():
+    for _, row in followers.iterrows():
+        user = User(user_id=str(row['user']))
+        user.follows(str(row['friend']))
+
+
+@timing
+def insert_likes():
+    for _, row in likes.iterrows():
+        user = User(user_id=str(row['user_id']))
+        user.likes(str(row['book_id']))
+
+
+#insert_likes()
+#insert_reads()
+#insert_tagged_to()
+insert_follows()
